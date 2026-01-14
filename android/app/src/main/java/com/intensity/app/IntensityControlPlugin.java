@@ -88,10 +88,9 @@ public class IntensityControlPlugin extends Plugin {
 
     @PluginMethod
     public void setIntensity(PluginCall call) {
-        if (getPermissionState("camera") != PermissionState.GRANTED) {
-            call.reject("Camera permission NOT granted. Current state: " + getPermissionState("camera"));
-            return;
-        }
+        // REMOVED mandatory permission check for debugging
+        // On many Android versions, torch doesn't strictly need CAMERA permission if
+        // foregrounded
 
         Double intensity = call.getDouble("intensity");
         if (intensity == null) {
@@ -117,7 +116,19 @@ public class IntensityControlPlugin extends Plugin {
             }
 
             if (cameraId == null) {
-                call.reject("Flashlight hardware not found in your sensors.");
+                // Last resort: any camera with a flash
+                for (String id : cameraManager.getCameraIdList()) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    if (hasFlash != null && hasFlash) {
+                        cameraId = id;
+                        break;
+                    }
+                }
+            }
+
+            if (cameraId == null) {
+                call.reject("Hardware not found");
                 return;
             }
 
@@ -132,9 +143,11 @@ public class IntensityControlPlugin extends Plugin {
                         int level = (int) Math.round(intensity * maxLevel);
                         level = Math.max(1, Math.min(maxLevel, level));
                         cameraManager.turnOnTorchWithStrengthLevel(cameraId, level);
+                        Log.d(TAG, "Native: turnOnTorchWithStrengthLevel(" + cameraId + ", " + level + ")");
                     }
                 } else {
                     cameraManager.setTorchMode(cameraId, intensity > 0);
+                    Log.d(TAG, "Native: setTorchMode(" + cameraId + ", " + (intensity > 0) + ")");
                 }
             } else {
                 cameraManager.setTorchMode(cameraId, intensity > 0);
@@ -142,7 +155,7 @@ public class IntensityControlPlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             Log.e(TAG, "Native Error: " + e.getMessage());
-            call.reject("Hardware Error: " + e.getMessage());
+            call.reject(e.getMessage());
         }
     }
 }

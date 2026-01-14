@@ -90,19 +90,14 @@ function App() {
   };
 
   useEffect(() => {
-    // 1. Request Permission FIRST
+    // DIAGNOSTIC CORE: Request permissions and Scan Hardware
     const init = async () => {
       try {
-        const status = await IntensityControl.checkPermissions();
-        if (status.camera !== 'granted') {
-          await IntensityControl.requestPermissions();
-        }
-
-        // 2. Scan Hardware
+        await IntensityControl.requestPermissions();
         const res = await IntensityControl.getFlashHardwareInfo();
         setHwData(res);
       } catch (err) {
-        setLastError("Init failed: " + err.message);
+        setLastError("Init: " + err.message);
       }
     };
     init();
@@ -112,7 +107,8 @@ function App() {
     if (mode !== 'monolith') return;
     const knob = knobRef.current;
     const track = trackRef.current;
-    if (!knob || !track) return;
+    const container = document.getElementById('monolith-container');
+    if (!knob || !track || !container) return;
 
     let isDragging = false;
 
@@ -133,12 +129,13 @@ function App() {
       isDragging = false;
     };
 
-    knob.addEventListener('pointerdown', handlePointerDown);
+    // Use container for wider hit area
+    container.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
 
     return () => {
-      knob.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
@@ -229,6 +226,7 @@ function App() {
                 />
               ))}
             </div>
+            <div className="val-text" style={{ fontSize: '10px', marginLeft: '5px' }}>{intensity}%</div>
           </div>
           <div className="label">
             TORCH
@@ -236,17 +234,17 @@ function App() {
               {hwData ? (
                 <>
                   {hwData.manufacturer} {hwData.model}<br />
-                  {hwData.cameras.map(c => `C${c.id}(${c.facing}):L${c.maxLevel}[${c.hwLevel}]${c.hasFlash ? '⚡' : ''}`).join(' | ')}
+                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}
                 </>
-              ) : "Requesting... "}
+              ) : "Syncing... "}
               {lastError && <div style={{ color: '#ff4444' }}>Err: {lastError}</div>}
             </div>
           </div>
         </div>
       </header>
 
-      <main>
-        <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`} id="monolith-container">
+      <main style={{ touchAction: 'none' }}>
+        <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`} id="monolith-container" style={{ touchAction: 'none' }}>
           <div className="monolith-track" ref={trackRef}>
             <div className="beam" id="monolith-beam" style={beamStyle}></div>
             <div
