@@ -14,7 +14,6 @@
     "@capacitor/cli": "^8.0.1",
     "@capacitor/core": "^8.0.1",
     "@capacitor/haptics": "^8.0.0",
-    "@capgo/capacitor-flash": "^8.0.8",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
