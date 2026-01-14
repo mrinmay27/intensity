@@ -46,22 +46,16 @@ public class IntensityControlPlugin extends Plugin {
                         facing = "BACK";
                     else if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT)
                         facing = "FRONT";
-                    else if (lensFacing == CameraCharacteristics.LENS_FACING_EXTERNAL)
-                        facing = "EXTERNAL";
                 }
                 info.put("facing", facing);
 
                 Integer hwLevel = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
                 String hwLevelStr = "OTHER";
                 if (hwLevel != null) {
-                    if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY)
-                        hwLevelStr = "LEGACY";
-                    else if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED)
-                        hwLevelStr = "LIMITED";
+                    if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3)
+                        hwLevelStr = "LEVEL_3";
                     else if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL)
                         hwLevelStr = "FULL";
-                    else if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3)
-                        hwLevelStr = "LEVEL_3";
                 }
                 info.put("hwLevel", hwLevelStr);
 
@@ -76,8 +70,6 @@ public class IntensityControlPlugin extends Plugin {
 
             JSObject response = new JSObject();
             response.put("cameras", results);
-            response.put("androidVersion", Build.VERSION.RELEASE);
-            response.put("sdkInt", Build.VERSION.SDK_INT);
             response.put("manufacturer", Build.MANUFACTURER);
             response.put("model", Build.MODEL);
             call.resolve(response);
@@ -88,10 +80,6 @@ public class IntensityControlPlugin extends Plugin {
 
     @PluginMethod
     public void setIntensity(PluginCall call) {
-        // REMOVED mandatory permission check for debugging
-        // On many Android versions, torch doesn't strictly need CAMERA permission if
-        // foregrounded
-
         Double intensity = call.getDouble("intensity");
         if (intensity == null) {
             call.reject("Intensity required");
@@ -116,18 +104,6 @@ public class IntensityControlPlugin extends Plugin {
             }
 
             if (cameraId == null) {
-                // Last resort: any camera with a flash
-                for (String id : cameraManager.getCameraIdList()) {
-                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                    if (hasFlash != null && hasFlash) {
-                        cameraId = id;
-                        break;
-                    }
-                }
-            }
-
-            if (cameraId == null) {
                 call.reject("Hardware not found");
                 return;
             }
@@ -143,16 +119,19 @@ public class IntensityControlPlugin extends Plugin {
                         int level = (int) Math.round(intensity * maxLevel);
                         level = Math.max(1, Math.min(maxLevel, level));
                         cameraManager.turnOnTorchWithStrengthLevel(cameraId, level);
-                        Log.d(TAG, "Native: turnOnTorchWithStrengthLevel(" + cameraId + ", " + level + ")");
                     }
                 } else {
                     cameraManager.setTorchMode(cameraId, intensity > 0);
-                    Log.d(TAG, "Native: setTorchMode(" + cameraId + ", " + (intensity > 0) + ")");
                 }
             } else {
                 cameraManager.setTorchMode(cameraId, intensity > 0);
             }
-            call.resolve();
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("id", cameraId);
+            ret.put("val", intensity);
+            call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "Native Error: " + e.getMessage());
             call.reject(e.getMessage());

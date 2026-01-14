@@ -15,6 +15,7 @@ function App() {
   const [activeStep, setActiveStep] = useState(0)
   const [hwData, setHwData] = useState(null)
   const [lastError, setLastError] = useState(null)
+  const [nativeResult, setNativeResult] = useState("Waiting...")
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -24,17 +25,14 @@ function App() {
 
   const playClick = async (val) => {
     Haptics.impact({ style: ImpactStyle.Light });
-
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     }
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
-
     const currentFloor = Math.floor(val);
     if (currentFloor === lastTickRef.current) return;
     lastTickRef.current = currentFloor;
-
     const t = ctx.currentTime;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -80,9 +78,12 @@ function App() {
     setIntensity(val);
     playClick(val);
 
-    // Hardware Control
-    IntensityControl.setIntensity({ intensity: val / 100 }).catch(err => {
+    IntensityControl.setIntensity({ intensity: val / 100 }).then(res => {
+      setNativeResult(`OK ID:${res.id}`);
+      setLastError(null);
+    }).catch(err => {
       setLastError(err.message);
+      setNativeResult(`FAIL`);
     });
 
     const level = Math.ceil(val / 20);
@@ -90,14 +91,13 @@ function App() {
   };
 
   useEffect(() => {
-    // DIAGNOSTIC CORE: Request permissions and Scan Hardware
     const init = async () => {
       try {
         await IntensityControl.requestPermissions();
         const res = await IntensityControl.getFlashHardwareInfo();
         setHwData(res);
       } catch (err) {
-        setLastError("Init: " + err.message);
+        setLastError("Init fail: " + err.message);
       }
     };
     init();
@@ -111,12 +111,10 @@ function App() {
     if (!knob || !track || !container) return;
 
     let isDragging = false;
-
     const handlePointerDown = (e) => {
       isDragging = true;
       knob.setPointerCapture(e.pointerId);
     };
-
     const handlePointerMove = (e) => {
       if (!isDragging) return;
       const rect = track.getBoundingClientRect();
@@ -124,12 +122,8 @@ function App() {
       let p = 100 - (y / rect.height) * 100;
       updateIntensity(p);
     };
+    const handlePointerUp = () => { isDragging = false; };
 
-    const handlePointerUp = () => {
-      isDragging = false;
-    };
-
-    // Use container for wider hit area
     container.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
@@ -147,12 +141,10 @@ function App() {
     if (!dial) return;
 
     let isDragging = false;
-
     const handlePointerDown = (e) => {
       isDragging = true;
       dial.setPointerCapture(e.pointerId);
     };
-
     const handlePointerMove = (e) => {
       if (!isDragging) return;
       const rect = dial.getBoundingClientRect();
@@ -164,10 +156,7 @@ function App() {
       const newVal = (normalized / 270) * 100;
       updateIntensity(newVal);
     };
-
-    const handlePointerUp = () => {
-      isDragging = false;
-    };
+    const handlePointerUp = () => { isDragging = false; };
 
     dial.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
@@ -226,7 +215,7 @@ function App() {
                 />
               ))}
             </div>
-            <div className="val-text" style={{ fontSize: '10px', marginLeft: '5px' }}>{intensity}%</div>
+            <div className="val-text" style={{ fontSize: '10px', marginLeft: '5px' }}>{intensity}% | {nativeResult}</div>
           </div>
           <div className="label">
             TORCH
@@ -257,6 +246,7 @@ function App() {
         </div>
 
         <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
+          <button onClick={() => updateIntensity(100)} className="instruction" style={{ top: '80px', pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '4px' }}>FORCE 100% TEST</button>
           <div className="dial-wrapper">
             <svg className="dial-svg" viewBox="0 0 400 400">
               <defs>
