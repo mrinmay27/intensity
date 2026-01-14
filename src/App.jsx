@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { Flash } from '@capgo/capacitor-flash';
+import { CapacitorFlash } from '@capgo/capacitor-flash';
 
 // TOTAL_ARC_LENGTH constant for Dial SVG
 const ARC_RADIUS = 170;
@@ -82,11 +82,11 @@ function App() {
     // Hardware Control: Flashlight
     // Map 0-100 to 0.0-1.0 intensity (Android 13+) or Simple On/Off (Older)
     if (val > 0) {
-      Flash.setIntensity({ intensity: val / 100 }).catch(() => {
-        Flash.switchOn(); // Fallback to simple on
+      CapacitorFlash.setIntensity({ intensity: val / 100 }).catch(() => {
+        CapacitorFlash.switchOn(); // Fallback to simple on
       });
     } else {
-      Flash.switchOff();
+      CapacitorFlash.switchOff();
     }
 
     const level = Math.ceil(val / 20);
