@@ -28,6 +28,14 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Create local.properties
+        working-directory: ./android
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+      - name: Make Gradlew Executable
+        working-directory: ./android
+        run: chmod +x gradlew
+
       - name: Install NPM Dependencies
         run: npm ci
 
@@ -36,14 +44,6 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
-
-      - name: Make Gradlew Executable
-        working-directory: ./android
-        run: chmod +x gradlew
-        
-      - name: Create local.properties
-        working-directory: ./android
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Build APK (Debug)
         working-directory: ./android
