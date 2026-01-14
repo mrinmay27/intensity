@@ -8,20 +8,18 @@ const TOTAL_ARC_LENGTH = 2 * Math.PI * ARC_RADIUS * (300 / 360);
 
 function App() {
   const [intensity, setIntensity] = useState(50)
-  const [mode, setMode] = useState('monolith') // Default to 'monolith' (SLIDER) to match prototype
+  const [mode, setMode] = useState('monolith')
   const [activeStep, setActiveStep] = useState(3)
 
-  // Refs
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
   const dialRef = useRef(null)
+  const knobRef = useRef(null)
+  const trackRef = useRef(null)
 
-  // Audio Engine: "Safe Dial" (Triangle Snap + Square Thud + Filter)
   const playClick = async (val) => {
-    // 1. Native Haptics (Physical vibration)
     Haptics.impact({ style: ImpactStyle.Light });
 
-    // 2. Audio Engine
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     }
@@ -33,7 +31,6 @@ function App() {
     lastTickRef.current = currentFloor;
 
     const t = ctx.currentTime;
-
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(800, t);
@@ -62,7 +59,6 @@ function App() {
     oscThud.start(t);
     oscThud.stop(t + 0.06);
 
-    // Haptic Visualizer
     const node = document.getElementById('haptic-visualizer');
     if (node) {
       node.style.opacity = '1';
@@ -75,15 +71,13 @@ function App() {
   };
 
   const updateIntensity = (val) => {
-    val = parseInt(val, 10);
+    val = Math.max(0, Math.min(100, Math.round(val)));
     setIntensity(val);
     playClick(val);
 
-    // Hardware Control: Flashlight
-    // Map 0-100 to 0.0-1.0 intensity (Android 13+) or Simple On/Off (Older)
     if (val > 0) {
       CapacitorFlash.setIntensity({ intensity: val / 100 }).catch(() => {
-        CapacitorFlash.switchOn(); // Fallback to simple on
+        CapacitorFlash.switchOn();
       });
     } else {
       CapacitorFlash.switchOff();
@@ -93,7 +87,42 @@ function App() {
     setActiveStep(level);
   };
 
-  // Dial Interaction Logic
+  useEffect(() => {
+    if (mode !== 'monolith') return;
+    const knob = knobRef.current;
+    const track = trackRef.current;
+    if (!knob || !track) return;
+
+    let isDragging = false;
+
+    const handlePointerDown = (e) => {
+      isDragging = true;
+      knob.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isDragging) return;
+      const rect = track.getBoundingClientRect();
+      let y = e.clientY - rect.top;
+      let p = 100 - (y / rect.height) * 100;
+      updateIntensity(p);
+    };
+
+    const handlePointerUp = () => {
+      isDragging = false;
+    };
+
+    knob.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      knob.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [mode]);
+
   useEffect(() => {
     if (mode !== 'dial') return;
     const dial = dialRef.current;
@@ -108,16 +137,13 @@ function App() {
 
     const handlePointerMove = (e) => {
       if (!isDragging) return;
-      e.preventDefault();
-
       const rect = dial.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-
       const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
       let normalized = (angle + 225) % 360;
       if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
-      const newVal = Math.round((normalized / 270) * 100);
+      const newVal = (normalized / 270) * 100;
       updateIntensity(newVal);
     };
 
@@ -154,7 +180,6 @@ function App() {
       <header style={{ color: uiColor }}>
         <div className="header-content">
           <div className="torch-icon">
-            {/* RESTORED: Top-Ray Torch Icon SVG */}
             <svg viewBox="0 0 100 100" fill="currentColor">
               <g stroke="currentColor" strokeWidth="5" strokeLinecap="round">
                 <line x1="30" y1="20" x2="20" y2="10" />
@@ -190,16 +215,14 @@ function App() {
 
       <main>
         <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`} id="monolith-container">
-          <div className="monolith-track">
+          <div className="monolith-track" ref={trackRef}>
             <div className="beam" id="monolith-beam" style={beamStyle}></div>
-            <input
-              type="range"
-              id="monolith-slider"
-              min="0" max="100"
-              value={intensity}
-              onChange={(e) => updateIntensity(e.target.value)}
-            />
-            <div className="monolith-knob" id="monolith-knob" style={knobStyle}></div>
+            <div
+              className="monolith-knob"
+              id="monolith-knob"
+              ref={knobRef}
+              style={{ ...knobStyle, pointerEvents: 'auto', cursor: 'ns-resize' }}
+            ></div>
           </div>
         </div>
 
