@@ -7,6 +7,7 @@ import android.hardware.camera2.CameraManager;
 import android.os.Build;
 import android.util.Log;
 
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -16,6 +17,46 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class IntensityControlPlugin extends Plugin {
 
     private static final String TAG = "IntensityControl";
+
+    private String getBackCameraWithFlash(CameraManager cameraManager) throws CameraAccessException {
+        for (String id : cameraManager.getCameraIdList()) {
+            CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+            Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+            Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
+            if (hasFlash != null && hasFlash && lensFacing != null
+                    && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                return id;
+            }
+        }
+        return null;
+    }
+
+    @PluginMethod
+    public void checkSupport(PluginCall call) {
+        Context context = getContext();
+        CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        JSObject ret = new JSObject();
+        try {
+            String cameraId = getBackCameraWithFlash(cameraManager);
+            if (cameraId == null) {
+                ret.put("supported", false);
+                ret.put("maxLevel", 0);
+                ret.put("error", "No camera with flash found");
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
+                ret.put("supported", maxLevel != null && maxLevel > 1);
+                ret.put("maxLevel", maxLevel != null ? maxLevel : 1);
+            } else {
+                ret.put("supported", false);
+                ret.put("maxLevel", 1);
+                ret.put("reason", "Android version below 13");
+            }
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
 
     @PluginMethod
     public void setIntensity(PluginCall call) {
@@ -29,22 +70,8 @@ public class IntensityControlPlugin extends Plugin {
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         try {
-            String cameraId = null;
-            // Robustly find the back camera that actually has a flash
-            for (String id : cameraManager.getCameraIdList()) {
-                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
-
-                if (hasFlash != null && hasFlash && lensFacing != null
-                        && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
-                    cameraId = id;
-                    break;
-                }
-            }
-
+            String cameraId = getBackCameraWithFlash(cameraManager);
             if (cameraId == null) {
-                // Last resort: just use the first camera in the list
                 String[] ids = cameraManager.getCameraIdList();
                 if (ids.length > 0)
                     cameraId = ids[0];

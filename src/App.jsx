@@ -13,6 +13,7 @@ function App() {
   const [intensity, setIntensity] = useState(0)
   const [mode, setMode] = useState('monolith')
   const [activeStep, setActiveStep] = useState(0)
+  const [hwInfo, setHwInfo] = useState("Checking HW...")
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -84,6 +85,15 @@ function App() {
     const level = Math.ceil(val / 20);
     setActiveStep(level);
   };
+
+  useEffect(() => {
+    // DIAGNOSTIC CORE: Tell us what the hardware actually sees
+    IntensityControl.checkSupport().then(res => {
+      setHwInfo(`Max Level: ${res.maxLevel || 1}`);
+    }).catch(err => {
+      setHwInfo("HW Check Failed");
+    });
+  }, []);
 
   useEffect(() => {
     if (mode !== 'monolith') return;
@@ -207,7 +217,10 @@ function App() {
               ))}
             </div>
           </div>
-          <div className="label">TORCH</div>
+          <div className="label">
+            TORCH
+            <div className="hw-debug" style={{ fontSize: '8px', opacity: 0.5, marginTop: '2px' }}>{hwInfo}</div>
+          </div>
         </div>
       </header>
 
