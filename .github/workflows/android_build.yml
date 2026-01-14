@@ -22,15 +22,21 @@ jobs:
         with:
           node-version: 18
 
-      - name: Setup Java (JDK 17)
+      - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
+          distribution: 'zulu'
           java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Licenses
+        run: yes | sdkmanager --licenses
 
       - name: Create local.properties
         working-directory: ./android
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Make Gradlew Executable
         working-directory: ./android
