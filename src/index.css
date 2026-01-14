@@ -1,0 +1,426 @@
+:root {
+  --bg-color: #111111;
+  --accent-color: #ffffff;
+  --text-dim: rgba(255, 255, 255, 0.4);
+  --text-bright: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glow-color: rgba(255, 255, 255, 0.2);
+  --shadow-deep: rgba(0, 0, 0, 0.8);
+  /* Enhanced 3D Metal Gradient */
+  /* "Dark Grey Alloy" Gradient (Heavy Metal) */
+  --metal-gradient: conic-gradient(from 180deg,
+      #a0a0a0 0%,
+      #606060 10%,
+      #a0a0a0 20%,
+      #606060 30%,
+      #a0a0a0 40%,
+      #606060 50%,
+      #a0a0a0 60%,
+      #606060 70%,
+      #a0a0a0 80%,
+      #606060 90%,
+      #a0a0a0 100%);
+  /* Dimmed specular reflection */
+  --metal-shine: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 40%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #0c0c0c;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3BaseFilter id='noiseFilter'%3BfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3B/filter%3B%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3B%3C/svg%3E");
+  background-blend-mode: soft-light;
+  color: var(--text-bright);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#root {
+  width: 100%;
+  max-width: 400px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+/* MOBILE OPTIMIZATION: Prevent scrolling on interactive elements */
+body,
+.dial-outer,
+.monolith-knob,
+#monolith-slider {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 20px 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.torch-icon svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text-bright);
+}
+
+.intensity-indicator {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 16px;
+  margin-bottom: 2px;
+}
+
+.sun-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding-bottom: 1px;
+}
+
+.sun-icon svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  display: block;
+}
+
+.steps {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.step {
+  width: 16px;
+  background: #2a2a2a;
+  border-radius: 1px;
+  transition: background 0.3s ease;
+}
+
+.step[data-level="1"] {
+  height: 4px;
+}
+
+.step[data-level="2"] {
+  height: 7px;
+}
+
+.step[data-level="3"] {
+  height: 10px;
+}
+
+.step[data-level="4"] {
+  height: 13px;
+}
+
+.step[data-level="5"] {
+  height: 16px;
+}
+
+.step.active {
+  background: var(--text-bright);
+  box-shadow: 0 0 5px var(--text-bright);
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+main {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.concept-view {
+  display: none;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.concept-view.active {
+  display: flex;
+}
+
+#monolith-container,
+#dial-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+}
+
+.instruction {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  top: 180px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.3;
+}
+
+/* Monolith Styling */
+.monolith-track {
+  width: 12px;
+  height: 380px;
+  background: #000;
+  border-radius: 6px;
+  position: relative;
+  box-shadow:
+    inset 2px 2px 4px rgba(0, 0, 0, 0.8),
+    inset -1px -1px 2px rgba(255, 255, 255, 0.05);
+  margin: 40px auto 0;
+  flex-shrink: 0;
+}
+
+.beam {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow:
+    0 0 24px rgba(255, 255, 255, 1),
+    0 0 48px rgba(255, 255, 255, 0.6);
+  transition: height 0.05s linear;
+}
+
+#monolith-slider {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 100%;
+  opacity: 0;
+  cursor: ns-resize;
+  z-index: 10;
+}
+
+.monolith-knob {
+  position: absolute;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  background-color: #a0a0a0;
+  background:
+    var(--metal-shine),
+    var(--metal-gradient),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3BaseFilter id='noiseFilter'%3BfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3B/filter%3B%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3B%3C/svg%3E");
+  background-blend-mode: overlay, normal, overlay;
+  border-radius: 50%;
+  transform: translate(-50%, 50%);
+  z-index: 20;
+  pointer-events: none;
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(0, 0, 0, 1);
+  transition: bottom 0.05s linear;
+}
+
+.monolith-knob::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Dial Styling */
+.dial-outer {
+  width: 280px;
+  height: 280px;
+  background-color: #a0a0a0;
+  background:
+    var(--metal-shine),
+    var(--metal-gradient),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3BaseFilter id='noiseFilter'%3BfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3B/filter%3B%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.5'/%3B%3C/svg%3E");
+  background-blend-mode: overlay, normal, overlay;
+  border-radius: 50%;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 1);
+  box-shadow:
+    0 40px 80px rgba(0, 0, 0, 0.9),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: grab;
+  transition: transform 0.1s linear;
+  margin: 0 auto;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.dial-outer::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  right: -6px;
+  bottom: -6px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg,
+      #111 0deg 1deg,
+      #444 1deg 2deg);
+  z-index: -1;
+  -webkit-mask-image: radial-gradient(transparent 68%, black 70%);
+  mask-image: radial-gradient(transparent 68%, black 70%);
+}
+
+.dial-mark {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 12px;
+  background-color: #FFBF00;
+  border-radius: 2px;
+  box-shadow:
+    0 0 4px #FFBF00,
+    0 0 8px rgba(255, 191, 0, 0.6),
+    inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 25;
+  pointer-events: none;
+}
+
+.dial-wrapper {
+  position: relative;
+  width: 380px;
+  height: 380px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dial-svg {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+#arc-fill {
+  transition: stroke-dashoffset 0.05s linear;
+}
+
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px 0;
+  z-index: 100;
+}
+
+.interaction-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.switcher-btn {
+  background: none;
+  border: none;
+  color: var(--text-bright);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+  width: 90px;
+  text-align: center;
+}
+
+.switcher-btn[data-mode="monolith"] {
+  text-align: right;
+}
+
+.switcher-btn[data-mode="dial"] {
+  text-align: left;
+}
+
+.switcher-btn.active {
+  opacity: 1;
+}
+
+.haptic-node {
+  width: 8px;
+  height: 8px;
+  background: #FFBF00;
+  border-radius: 50%;
+  opacity: 0.2;
+  transition: all 0.1s;
+  box-shadow: 0 0 10px #FFBF00;
+  flex-shrink: 0;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  height: 80px;
+  width: 80px;
+}
