@@ -1,5 +1,6 @@
 package com.intensity.app;
 
+import android.Manifest;
 import android.content.Context;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
@@ -9,12 +10,16 @@ import android.util.Log;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
 
-@CapacitorPlugin(name = "IntensityControl")
+@CapacitorPlugin(name = "IntensityControl", permissions = {
+        @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })
+})
 public class IntensityControlPlugin extends Plugin {
 
     private static final String TAG = "IntensityControl";
@@ -26,7 +31,6 @@ public class IntensityControlPlugin extends Plugin {
         JSArray results = new JSArray();
 
         try {
-            // DEEP SCAN: Look at EVERY sensor the OS exposes
             for (String id : cameraManager.getCameraIdList()) {
                 CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
                 Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
@@ -47,9 +51,8 @@ public class IntensityControlPlugin extends Plugin {
                 }
                 info.put("facing", facing);
 
-                // Hardware Level (LEGACY, LIMITED, FULL, LEVEL_3)
                 Integer hwLevel = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
-                String hwLevelStr = "UNKNOWN";
+                String hwLevelStr = "OTHER";
                 if (hwLevel != null) {
                     if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_LEGACY)
                         hwLevelStr = "LEGACY";
@@ -65,10 +68,8 @@ public class IntensityControlPlugin extends Plugin {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
                     info.put("maxLevel", maxLevel != null ? maxLevel : (hasFlash != null && hasFlash ? 1 : 0));
-                    info.put("isRawNull", maxLevel == null);
                 } else {
                     info.put("maxLevel", hasFlash != null && hasFlash ? 1 : 0);
-                    info.put("note", "API 33+ required for dimming");
                 }
                 results.put(info);
             }
@@ -87,9 +88,12 @@ public class IntensityControlPlugin extends Plugin {
 
     @PluginMethod
     public void setIntensity(PluginCall call) {
-        Double intensity = call.getDouble("intensity");
-        String forceId = call.getString("cameraId");
+        if (getPermissionState("camera") != PermissionState.GRANTED) {
+            call.reject("Camera permission NOT granted. Current state: " + getPermissionState("camera"));
+            return;
+        }
 
+        Double intensity = call.getDouble("intensity");
         if (intensity == null) {
             call.reject("Intensity required");
             return;
@@ -99,35 +103,21 @@ public class IntensityControlPlugin extends Plugin {
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         try {
-            String cameraId = forceId;
-            if (cameraId == null) {
-                // Priority: Back camera with flash
-                for (String id : cameraManager.getCameraIdList()) {
-                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                    Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                    if (hasFlash != null && hasFlash && lensFacing != null
-                            && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
-                        cameraId = id;
-                        break;
-                    }
+            String cameraId = null;
+            // Best candidate selection
+            for (String id : cameraManager.getCameraIdList()) {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if (hasFlash != null && hasFlash && lensFacing != null
+                        && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                    cameraId = id;
+                    break;
                 }
             }
 
             if (cameraId == null) {
-                // Fallback: Any camera with flash
-                for (String id : cameraManager.getCameraIdList()) {
-                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                    if (hasFlash != null && hasFlash) {
-                        cameraId = id;
-                        break;
-                    }
-                }
-            }
-
-            if (cameraId == null) {
-                call.reject("No flashlight hardware detected");
+                call.reject("Flashlight hardware not found in your sensors.");
                 return;
             }
 
@@ -151,7 +141,8 @@ public class IntensityControlPlugin extends Plugin {
             }
             call.resolve();
         } catch (Exception e) {
-            call.reject(e.getMessage());
+            Log.e(TAG, "Native Error: " + e.getMessage());
+            call.reject("Hardware Error: " + e.getMessage());
         }
     }
 }

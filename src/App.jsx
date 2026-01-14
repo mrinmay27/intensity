@@ -14,6 +14,7 @@ function App() {
   const [mode, setMode] = useState('monolith')
   const [activeStep, setActiveStep] = useState(0)
   const [hwData, setHwData] = useState(null)
+  const [lastError, setLastError] = useState(null)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -79,20 +80,32 @@ function App() {
     setIntensity(val);
     playClick(val);
 
-    // Hardware Control: Custom Native Intensity
-    IntensityControl.setIntensity({ intensity: val / 100 }).catch(console.error);
+    // Hardware Control
+    IntensityControl.setIntensity({ intensity: val / 100 }).catch(err => {
+      setLastError(err.message);
+    });
 
     const level = Math.ceil(val / 20);
     setActiveStep(level);
   };
 
   useEffect(() => {
-    // DIAGNOSTIC CORE: Ultra-Deep Hardware Probe
-    IntensityControl.getFlashHardwareInfo().then(res => {
-      setHwData(res);
-    }).catch(err => {
-      console.error("DIAGNOSTIC FAILED:", err);
-    });
+    // 1. Request Permission FIRST
+    const init = async () => {
+      try {
+        const status = await IntensityControl.checkPermissions();
+        if (status.camera !== 'granted') {
+          await IntensityControl.requestPermissions();
+        }
+
+        // 2. Scan Hardware
+        const res = await IntensityControl.getFlashHardwareInfo();
+        setHwData(res);
+      } catch (err) {
+        setLastError("Init failed: " + err.message);
+      }
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -225,7 +238,8 @@ function App() {
                   {hwData.manufacturer} {hwData.model}<br />
                   {hwData.cameras.map(c => `C${c.id}(${c.facing}):L${c.maxLevel}[${c.hwLevel}]${c.hasFlash ? '⚡' : ''}`).join(' | ')}
                 </>
-              ) : "Deep Scanning..."}
+              ) : "Requesting... "}
+              {lastError && <div style={{ color: '#ff4444' }}>Err: {lastError}</div>}
             </div>
           </div>
         </div>
