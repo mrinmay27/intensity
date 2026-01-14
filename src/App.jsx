@@ -87,10 +87,12 @@ function App() {
   };
 
   useEffect(() => {
-    // DIAGNOSTIC CORE: Deep Hardware Probe
+    // DIAGNOSTIC CORE: Ultra-Deep Hardware Probe
     IntensityControl.getFlashHardwareInfo().then(res => {
       setHwData(res);
-    }).catch(console.error);
+    }).catch(err => {
+      console.error("DIAGNOSTIC FAILED:", err);
+    });
   }, []);
 
   useEffect(() => {
@@ -217,13 +219,13 @@ function App() {
           </div>
           <div className="label">
             TORCH
-            <div className="hw-debug" style={{ fontSize: '7px', opacity: 0.5, marginTop: '2px', lineHeight: '1.2' }}>
+            <div className="hw-debug" style={{ fontSize: '6px', opacity: 0.5, marginTop: '2px', lineHeight: '1.2' }}>
               {hwData ? (
                 <>
-                  OS: {hwData.androidVersion} (API {hwData.sdkInt})<br />
-                  {hwData.cameras.map(c => `CAM ${c.id} (${c.facing}): ${c.maxLevel}`).join(' | ')}
+                  {hwData.manufacturer} {hwData.model}<br />
+                  {hwData.cameras.map(c => `C${c.id}(${c.facing}):L${c.maxLevel}[${c.hwLevel}]${c.hasFlash ? '⚡' : ''}`).join(' | ')}
                 </>
-              ) : "Scanning HW..."}
+              ) : "Deep Scanning..."}
             </div>
           </div>
         </div>
