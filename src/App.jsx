@@ -10,9 +10,9 @@ const ARC_RADIUS = 170;
 const TOTAL_ARC_LENGTH = 2 * Math.PI * ARC_RADIUS * (300 / 360);
 
 function App() {
-  const [intensity, setIntensity] = useState(50)
+  const [intensity, setIntensity] = useState(0)
   const [mode, setMode] = useState('monolith')
-  const [activeStep, setActiveStep] = useState(3)
+  const [activeStep, setActiveStep] = useState(0)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
