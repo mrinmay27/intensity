@@ -56,7 +56,7 @@ public class IntensityControlPlugin extends Plugin {
                         info.put("maxLevel", 1);
                         info.put("note", "Requires Android 13+");
                     }
-                    results.add(info);
+                    results.put(info);
                 }
             }
             JSObject response = new JSObject();
