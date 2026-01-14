@@ -13,7 +13,7 @@ function App() {
   const [intensity, setIntensity] = useState(0)
   const [mode, setMode] = useState('monolith')
   const [activeStep, setActiveStep] = useState(0)
-  const [hwInfo, setHwInfo] = useState("Checking HW...")
+  const [hwData, setHwData] = useState(null)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -87,12 +87,10 @@ function App() {
   };
 
   useEffect(() => {
-    // DIAGNOSTIC CORE: Tell us what the hardware actually sees
-    IntensityControl.checkSupport().then(res => {
-      setHwInfo(`Max Level: ${res.maxLevel || 1}`);
-    }).catch(err => {
-      setHwInfo("HW Check Failed");
-    });
+    // DIAGNOSTIC CORE: Deep Hardware Probe
+    IntensityControl.getFlashHardwareInfo().then(res => {
+      setHwData(res);
+    }).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -219,7 +217,14 @@ function App() {
           </div>
           <div className="label">
             TORCH
-            <div className="hw-debug" style={{ fontSize: '8px', opacity: 0.5, marginTop: '2px' }}>{hwInfo}</div>
+            <div className="hw-debug" style={{ fontSize: '7px', opacity: 0.5, marginTop: '2px', lineHeight: '1.2' }}>
+              {hwData ? (
+                <>
+                  OS: {hwData.androidVersion} (API {hwData.sdkInt})<br />
+                  {hwData.cameras.map(c => `CAM ${c.id} (${c.facing}): ${c.maxLevel}`).join(' | ')}
+                </>
+              ) : "Scanning HW..."}
+            </div>
           </div>
         </div>
       </header>
