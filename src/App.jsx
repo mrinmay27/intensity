@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { CapacitorFlash } from '@capgo/capacitor-flash';
+import { registerPlugin } from '@capacitor/core';
+
+// Native Bridge for Granular Dimming
+const IntensityControl = registerPlugin('IntensityControl');
 
 // TOTAL_ARC_LENGTH constant for Dial SVG
 const ARC_RADIUS = 170;
@@ -75,11 +78,8 @@ function App() {
     setIntensity(val);
     playClick(val);
 
-    if (val > 0) {
-      CapacitorFlash.switchOn();
-    } else {
-      CapacitorFlash.switchOff();
-    }
+    // Hardware Control: Custom Native Intensity
+    IntensityControl.setIntensity({ intensity: val / 100 }).catch(console.error);
 
     const level = Math.ceil(val / 20);
     setActiveStep(level);
