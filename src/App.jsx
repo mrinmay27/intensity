@@ -76,9 +76,7 @@ function App() {
     playClick(val);
 
     if (val > 0) {
-      CapacitorFlash.setIntensity({ intensity: val / 100 }).catch(() => {
-        CapacitorFlash.switchOn();
-      });
+      CapacitorFlash.switchOn();
     } else {
       CapacitorFlash.switchOff();
     }
