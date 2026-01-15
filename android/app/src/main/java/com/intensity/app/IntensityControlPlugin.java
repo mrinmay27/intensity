@@ -89,6 +89,18 @@ public class IntensityControlPlugin extends Plugin {
                 } else {
                     info.put("maxLevel", hasFlash != null && hasFlash ? 1 : 0);
                 }
+
+                // DUMP ALL KEYS for the primary back camera (usually ID 0 or the one with
+                // flash)
+                if (id.equals("0") || (hasFlash != null && hasFlash)) {
+                    List<CameraCharacteristics.Key<?>> keys = characteristics.getKeys();
+                    JSArray keyNames = new JSArray();
+                    for (CameraCharacteristics.Key<?> key : keys) {
+                        keyNames.put(key.getName());
+                    }
+                    info.put("keys", keyNames);
+                }
+
                 results.put(info);
             }
 
@@ -120,7 +132,6 @@ public class IntensityControlPlugin extends Plugin {
                 String[] ids = cameraManager.getCameraIdList();
                 for (String id : ids)
                     targetIds.add(id);
-                // Also common hidden ones
                 for (int i = 0; i < 11; i++) {
                     String si = String.valueOf(i);
                     if (!targetIds.contains(si))
@@ -141,9 +152,9 @@ public class IntensityControlPlugin extends Plugin {
                             cameraManager.setTorchMode(id, false);
                         } else {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                // Try strength first, even if it reports max 1
                                 try {
-                                    int level = (int) Math.round(intensity * 10); // Try 1-10 range
+                                    // Try strength first, even if it reports max 1
+                                    int level = (int) Math.round(intensity * 10);
                                     level = Math.max(1, level);
                                     cameraManager.turnOnTorchWithStrengthLevel(id, level);
                                 } catch (Exception e) {
@@ -155,7 +166,6 @@ public class IntensityControlPlugin extends Plugin {
                         }
                     }
                 } catch (Exception e) {
-                    // Ignore individual failures in burst mode
                     if (!burstAll)
                         throw e;
                 }

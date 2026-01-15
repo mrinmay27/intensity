@@ -18,6 +18,7 @@ function App() {
   const [nativeResult, setNativeResult] = useState("Off")
   const [customId, setCustomId] = useState("0")
   const [burstMode, setBurstMode] = useState(false)
+  const [showKeys, setShowKeys] = useState(false)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -195,7 +196,6 @@ function App() {
   };
   const knobStyle = { bottom: `${intensity}%` };
   const rotateDeg = 210 + (intensityFloat * 300);
-  const dialStyle = { transform: `rotate(${rotateDeg}deg)` };
   const strokeOffset = TOTAL_ARC_LENGTH * (1 - intensityFloat);
 
   return (
@@ -215,33 +215,22 @@ function App() {
             </svg>
           </div>
           <div className="intensity-indicator">
-            <div className="sun-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
-              </svg>
-            </div>
+            <div className="sun-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" /></svg></div>
             <div className="steps">
               {[1, 2, 3, 4, 5].map((level) => (
-                <div
-                  key={level}
-                  className={`step ${level <= activeStep ? 'active' : ''}`}
-                  data-level={level}
-                  style={level <= activeStep ? { background: '#fff', boxShadow: '0 0 10px rgba(255,255,255,0.8)' } : { background: 'rgba(255,255,255,0.1)', boxShadow: 'none' }}
-                />
+                <div key={level} className={`step ${level <= activeStep ? 'active' : ''}`} style={level <= activeStep ? { background: '#fff', boxShadow: '0 0 10px rgba(255,255,255,0.8)' } : { background: 'rgba(255,255,255,0.1)' }} />
               ))}
             </div>
             <div className="val-text" style={{ fontSize: '10px', marginLeft: '5px' }}>{intensity}% | {nativeResult}</div>
           </div>
           <div className="label">
             TORCH
-            <div className="hw-debug" style={{ fontSize: '6.5px', opacity: 0.6, marginTop: '2px', lineHeight: '1.2' }}>
+            <div className="hw-debug" style={{ fontSize: '6.5px', opacity: 0.6, marginTop: '2px' }}>
               {hwData ? (
                 <>
-                  {hwData.manufacturer} {hwData.model}<br />
-                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}<br />
-                  Status: <span style={{ color: hwData.torchStatus.includes('ON') ? '#00ff00' : '#fff' }}>{hwData.torchStatus}</span><br />
+                  {hwData.manufacturer} {hwData.model} | {hwData.torchStatus}<br />
                   {hwData.scanResult && <div style={{ color: '#fff', fontSize: '6px' }}>{hwData.scanResult}</div>}
+                  <button onClick={() => setShowKeys(!showKeys)} style={{ background: '#333', color: '#fff', border: 'none', padding: '2px 4px', fontSize: '6px', borderRadius: '2px' }}>DUMP KEYS</button>
                 </>
               ) : "Syncing... "}
             </div>
@@ -249,59 +238,41 @@ function App() {
         </div>
       </header>
 
+      {showKeys && hwData?.cameras?.[0]?.keys && (
+        <div style={{ position: 'fixed', top: '100px', left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', color: '#00ff00', fontSize: '8px', padding: '20px', zIndex: 11000, overflowY: 'auto', fontFamily: 'monospace' }}>
+          <button onClick={() => setShowKeys(false)} style={{ position: 'sticky', top: 0, float: 'right', background: '#ff4444', color: '#fff', border: 'none', padding: '5px' }}>CLOSE</button>
+          <h3>CAMERA CHARACTERISTICS KEYS:</h3>
+          {hwData.cameras[0].keys.map(k => <div key={k}>{k}</div>)}
+        </div>
+      )}
+
       <main style={{ touchAction: 'none' }}>
         <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`} id="monolith-container" style={{ touchAction: 'none' }}>
           <div className="monolith-track" ref={trackRef}>
             <div className="beam" id="monolith-beam" style={beamStyle}></div>
-            <div
-              className="monolith-knob"
-              id="monolith-knob"
-              ref={knobRef}
-              style={{ ...knobStyle, pointerEvents: 'auto', cursor: 'ns-resize' }}
-            ></div>
+            <div className="monolith-knob" ref={knobRef} style={knobStyle}></div>
           </div>
         </div>
-
         <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
           <div className="dial-wrapper">
-            {/* ... existing dial svg ... */}
             <svg className="dial-svg" viewBox="0 0 400 400">
-              <defs>
-                <filter id="arc-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="6" result="coloredBlur" />
-                  <feMerge>
-                    <feMergeNode in="coloredBlur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              <path d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#000" strokeWidth="14" strokeLinecap="round" />
-              <path id="arc-fill" d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" filter="url(#arc-glow)" strokeDasharray={TOTAL_ARC_LENGTH} strokeDashoffset={strokeOffset} />
-            </svg>
-            <div className="dial-outer" ref={dialRef} style={dialStyle}><div className="dial-mark"></div></div>
+              <defs><filter id="arc-glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="coloredBlur" /><feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+              <path d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#000" strokeWidth="14" strokeLinecap="round" /><path id="arc-fill" d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" filter="url(#arc-glow)" strokeDasharray={TOTAL_ARC_LENGTH} strokeDashoffset={strokeOffset} /></svg>
+            <div className="dial-outer" ref={dialRef} style={{ transform: `rotate(${210 + (intensityFloat * 300)}deg)` }}><div className="dial-mark"></div></div>
           </div>
           <div className="instruction">ROTATE</div>
         </div>
       </main>
 
-      {/* ERROR CONSOLE */}
-      {lastError && (
-        <div style={{ position: 'fixed', top: '150px', background: 'rgba(255,0,0,0.8)', color: '#fff', fontSize: '10px', padding: '10px', width: '100%', zIndex: 10000 }}>
-          {lastError}
-        </div>
-      )}
-
       {/* AGGRESSIVE PROBE PANEL */}
       <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.8)', borderTop: '1px solid #444' }}>
         <div style={{ color: '#fff', fontSize: '10px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
           ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '30px', background: '#333', color: '#fff', border: '1px solid #555' }} />
-          <button onClick={() => setBurstMode(!burstMode)} style={{ marginLeft: '10px', background: burstMode ? '#ff4444' : '#444', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>
-            {burstMode ? "BURST: ON" : "BURST: OFF"}
-          </button>
+          <button onClick={() => setBurstMode(!burstMode)} style={{ marginLeft: '10px', background: burstMode ? '#ff4444' : '#444', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>{burstMode ? "BURST: ON" : "BURST: OFF"}</button>
           <button onClick={() => IntensityControl.deepScan()} style={{ marginLeft: '5px', background: '#007fff', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>SCAN</button>
         </div>
-        <button onClick={() => updateIntensity(100, customId, 5)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>F5</button>
-        <button onClick={() => updateIntensity(100, customId, 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>F10</button>
+        <button onClick={() => updateIntensity(100, customId, 1)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>L1</button>
+        <button onClick={() => updateIntensity(100, customId, 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>L10</button>
         <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>OFF</button>
       </div>
 
