@@ -18,11 +18,14 @@ function App() {
   const [nativeResult, setNativeResult] = useState("Off")
   const [customId, setCustomId] = useState("0")
   const [usePWM, setUsePWM] = useState(false)
+  const [showDump, setShowDump] = useState(false)
+  const [charDump, setCharDump] = useState([])
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
   const dialRef = useRef(null)
   const trackRef = useRef(null)
+  const isDraggingRef = useRef(false)
 
   const playClick = async (val) => {
     Haptics.impact({ style: ImpactStyle.Light });
@@ -91,32 +94,62 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSliderPointerDown = (e) => {
-    e.target.setPointerCapture(e.pointerId);
-    handleSliderPointerMove(e);
+  // ROBUST GESTURE LOGIC using Global Window Listeners
+  useEffect(() => {
+    const handleGlobalMove = (e) => {
+      if (!isDraggingRef.current) return;
+
+      if (mode === 'monolith' && trackRef.current) {
+        const rect = trackRef.current.getBoundingClientRect();
+        let p = 100 - ((e.clientY - rect.top) / rect.height) * 100;
+        updateIntensity(p);
+      } else if (mode === 'dial' && dialRef.current) {
+        const rect = dialRef.current.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+        let normalized = (angle + 225) % 360;
+        if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
+        updateIntensity((normalized / 270) * 100);
+      }
+    };
+
+    const handleGlobalUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('pointermove', handleGlobalMove);
+    window.addEventListener('pointerup', handleGlobalUp);
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalMove);
+      window.removeEventListener('pointerup', handleGlobalUp);
+    };
+  }, [mode, usePWM, customId]);
+
+  const handlePointerDown = (e) => {
+    isDraggingRef.current = true;
+    // Trigger initial update on touch down
+    if (mode === 'monolith' && trackRef.current) {
+      const rect = trackRef.current.getBoundingClientRect();
+      let p = 100 - ((e.clientY - rect.top) / rect.height) * 100;
+      updateIntensity(p);
+    } else if (mode === 'dial' && dialRef.current) {
+      const rect = dialRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+      let normalized = (angle + 225) % 360;
+      if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
+      updateIntensity((normalized / 270) * 100);
+    }
   };
 
-  const handleSliderPointerMove = (e) => {
-    if (!e.target.hasPointerCapture(e.pointerId)) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    let p = 100 - ((e.clientY - rect.top) / rect.height) * 100;
-    updateIntensity(p);
-  };
-
-  const handleDialPointerDown = (e) => {
-    e.target.setPointerCapture(e.pointerId);
-    handleDialPointerMove(e);
-  };
-
-  const handleDialPointerMove = (e) => {
-    if (!e.target.hasPointerCapture(e.pointerId)) return;
-    const rect = dialRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
-    let normalized = (angle + 225) % 360;
-    if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
-    updateIntensity((normalized / 270) * 100);
+  const runDump = async () => {
+    try {
+      const res = await IntensityControl.dumpAllCharacteristics({ cameraId: customId });
+      setCharDump(res.data);
+      setShowDump(true);
+    } catch (err) { setLastError(err.message); }
   };
 
   const intensityFloat = intensity / 100;
@@ -138,19 +171,25 @@ function App() {
           <div className="label">
             TORCH
             <div className="hw-debug" style={{ fontSize: '6px', opacity: 0.6 }}>
-              {hwData ? `${hwData.model} | HW Status: ${hwData.torchStatus}` : "Syncing..."}
+              {hwData ? `${hwData.model} | HW: ${hwData.torchStatus}` : "Syncing..."}
             </div>
           </div>
         </div>
       </header>
+
+      {showDump && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.95)', color: '#00ff00', zIndex: 11000, padding: '20px', overflowY: 'auto', fontSize: '10px', fontFamily: 'monospace' }}>
+          <button onClick={() => setShowDump(false)} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '10px', marginBottom: '10px', borderRadius: '5px' }}>CLOSE DUMP</button>
+          {charDump.map((line, i) => <div key={i} style={{ marginBottom: '4px', borderBottom: '1px solid #111' }}>{line}</div>)}
+        </div>
+      )}
 
       <main style={{ touchAction: 'none' }}>
         <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`}>
           <div
             className="monolith-track"
             ref={trackRef}
-            onPointerDown={handleSliderPointerDown}
-            onPointerMove={handleSliderPointerMove}
+            onPointerDown={handlePointerDown}
             style={{ touchAction: 'none' }}
           >
             <div
@@ -176,8 +215,7 @@ function App() {
             <div
               className="dial-outer"
               ref={dialRef}
-              onPointerDown={handleDialPointerDown}
-              onPointerMove={handleDialPointerMove}
+              onPointerDown={handlePointerDown}
               style={{ transform: `rotate(${210 + (intensityFloat * 300)}deg)`, touchAction: 'none' }}
             >
               <div className="dial-mark" style={{ pointerEvents: 'none' }}></div>
@@ -190,11 +228,13 @@ function App() {
         <div style={{ color: '#fff', fontSize: '9px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
           ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '30px', background: '#333', color: '#fff', border: '1px solid #555' }} />
           <button onClick={() => setUsePWM(!usePWM)} style={{ marginLeft: '10px', background: usePWM ? '#00ff00' : '#444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '3px', fontSize: '9px' }}>PWM: {usePWM ? 'ON' : 'OFF'}</button>
+          <button onClick={runDump} style={{ marginLeft: '5px', background: '#007fff', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '3px', fontSize: '9px' }}>DUMP PROPS</button>
         </div>
         <button onClick={() => updateIntensity(20)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>20%</button>
         <button onClick={() => updateIntensity(50)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>50%</button>
         <button onClick={() => updateIntensity(100)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>100%</button>
         <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
+        {hwData?.scanResult && <div style={{ fontSize: '6px', color: '#888', width: '100%', textAlign: 'center' }}>{hwData.scanResult}</div>}
       </div>
 
       <footer>
