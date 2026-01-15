@@ -73,12 +73,15 @@ function App() {
     }
   };
 
-  const updateIntensity = (val) => {
+  const updateIntensity = (val, forcedId = null) => {
     val = Math.max(0, Math.min(100, Math.round(val)));
     setIntensity(val);
     playClick(val);
 
-    IntensityControl.setIntensity({ intensity: val / 100 }).then(res => {
+    IntensityControl.setIntensity({
+      intensity: val / 100,
+      cameraId: forcedId
+    }).then(res => {
       setNativeResult(`ID:${res.id} ${res.status}`);
       setLastError(null);
     }).catch(err => {
@@ -88,6 +91,15 @@ function App() {
 
     const level = Math.ceil(val / 20);
     setActiveStep(level);
+  };
+
+  const burstAll = async () => {
+    try {
+      await IntensityControl.bruteForceAll();
+      setNativeResult("BURST SENT");
+    } catch (err) {
+      setLastError("Burst: " + err.message);
+    }
   };
 
   useEffect(() => {
@@ -101,8 +113,6 @@ function App() {
       }
     };
     init();
-
-    // Auto-refresh hw info for status tracking
     const interval = setInterval(async () => {
       try {
         const res = await IntensityControl.getFlashHardwareInfo();
@@ -256,27 +266,6 @@ function App() {
         </div>
 
         <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
-          <button
-            onClick={(e) => { e.stopPropagation(); updateIntensity(100); }}
-            style={{
-              position: 'absolute',
-              top: '80px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 999,
-              pointerEvents: 'auto',
-              background: '#f0f0f0',
-              color: '#333',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-            }}
-          >
-            FORCE 100% TEST
-          </button>
           <div className="dial-wrapper">
             <svg className="dial-svg" viewBox="0 0 400 400">
               <defs>
@@ -320,6 +309,14 @@ function App() {
           <div className="instruction">ROTATE</div>
         </div>
       </main>
+
+      {/* FIXED DEBUG PANEL: Bottom of screen, definitely clickable */}
+      <div style={{ position: 'fixed', bottom: '100px', left: 0, right: 0, zIndex: 9999, display: 'flex', gap: '5px', padding: '0 10px', justifyContent: 'center', pointerEvents: 'auto' }}>
+        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold' }}>BURST ALL IDs</button>
+        <button onClick={() => updateIntensity(100, "0")} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>TEST C0</button>
+        <button onClick={() => updateIntensity(100, "1")} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>TEST C1</button>
+        <button onClick={() => updateIntensity(0)} style={{ background: '#000', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
+      </div>
 
       <footer>
         <div className="interaction-group">

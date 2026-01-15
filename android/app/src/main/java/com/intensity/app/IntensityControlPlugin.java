@@ -26,6 +26,7 @@ public class IntensityControlPlugin extends Plugin {
 
     private static final String TAG = "IntensityControl";
     private String lastStatus = "Unknown";
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void load() {
@@ -48,7 +49,7 @@ public class IntensityControlPlugin extends Plugin {
                     super.onTorchModeUnavailable(cameraId);
                     lastStatus = "ID:" + cameraId + " UNAVAILABLE";
                 }
-            }, new Handler(Looper.getMainLooper()));
+            }, handler);
         }
     }
 
@@ -76,16 +77,6 @@ public class IntensityControlPlugin extends Plugin {
                         facing = "FRONT";
                 }
                 info.put("facing", facing);
-
-                Integer hwLevel = characteristics.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
-                String hwLevelStr = "OTHER";
-                if (hwLevel != null) {
-                    if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_3)
-                        hwLevelStr = "LEVEL_3";
-                    else if (hwLevel == CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL_FULL)
-                        hwLevelStr = "FULL";
-                }
-                info.put("hwLevel", hwLevelStr);
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
@@ -123,7 +114,7 @@ public class IntensityControlPlugin extends Plugin {
         try {
             String cameraId = forceId;
             if (cameraId == null) {
-                // Best candidate selection
+                // Auto-selector
                 for (String id : cameraManager.getCameraIdList()) {
                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
                     Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
@@ -134,30 +125,35 @@ public class IntensityControlPlugin extends Plugin {
                         break;
                     }
                 }
+                // Fallback to ANY in list if auto-selector failed
+                if (cameraId == null && cameraManager.getCameraIdList().length > 0) {
+                    cameraId = cameraManager.getCameraIdList()[0];
+                }
             }
 
             if (cameraId == null) {
-                call.reject("Hardware not found");
+                call.reject("No camera ID found");
                 return;
             }
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
-                Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
-
-                if (maxLevel != null && maxLevel > 1) {
-                    if (intensity <= 0) {
-                        cameraManager.setTorchMode(cameraId, false);
-                    } else {
+            // Always try setTorchMode FIRST for maximum compatibility, then
+            // turnOnTorchWithStrengthLevel
+            if (intensity <= 0) {
+                cameraManager.setTorchMode(cameraId, false);
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
+                    Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
+                    if (maxLevel != null && maxLevel > 1) {
                         int level = (int) Math.round(intensity * maxLevel);
                         level = Math.max(1, Math.min(maxLevel, level));
                         cameraManager.turnOnTorchWithStrengthLevel(cameraId, level);
+                    } else {
+                        cameraManager.setTorchMode(cameraId, true);
                     }
                 } else {
-                    cameraManager.setTorchMode(cameraId, intensity > 0);
+                    cameraManager.setTorchMode(cameraId, true);
                 }
-            } else {
-                cameraManager.setTorchMode(cameraId, intensity > 0);
             }
 
             JSObject ret = new JSObject();
@@ -166,7 +162,25 @@ public class IntensityControlPlugin extends Plugin {
             ret.put("status", lastStatus);
             call.resolve(ret);
         } catch (Exception e) {
-            Log.e(TAG, "Native Error: " + e.getMessage());
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void bruteForceAll(PluginCall call) {
+        Context context = getContext();
+        CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            String[] ids = cameraManager.getCameraIdList();
+            for (String id : ids) {
+                try {
+                    cameraManager.setTorchMode(id, true);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to force ID:" + id);
+                }
+            }
+            call.resolve();
+        } catch (Exception e) {
             call.reject(e.getMessage());
         }
     }
