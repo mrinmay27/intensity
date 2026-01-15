@@ -73,14 +73,15 @@ function App() {
     }
   };
 
-  const updateIntensity = (val, forcedId = null) => {
+  const updateIntensity = (val, forcedId = null, forcedLevel = null) => {
     val = Math.max(0, Math.min(100, Math.round(val)));
     setIntensity(val);
     playClick(val);
 
     IntensityControl.setIntensity({
       intensity: val / 100,
-      cameraId: forcedId
+      cameraId: forcedId,
+      forceLevel: forcedLevel
     }).then(res => {
       setNativeResult(`ID:${res.id} ${res.status}`);
       setLastError(null);
@@ -242,7 +243,7 @@ function App() {
               {hwData ? (
                 <>
                   {hwData.manufacturer} {hwData.model}<br />
-                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}${c.physicalIds ? `(Ph:${c.physicalIds.join(',')})` : ''}`).join(' | ')}<br />
+                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}<br />
                   Actual HW Status: <span style={{ color: hwData.torchStatus.includes('ON') ? '#00ff00' : '#fff' }}>{hwData.torchStatus}</span>
                 </>
               ) : "Syncing... "}
@@ -309,20 +310,22 @@ function App() {
         </div>
       </main>
 
-      {/* ERROR CONSOLE: Floating floating box if error exists */}
+      {/* ERROR CONSOLE */}
       {lastError && (
         <div style={{ position: 'fixed', top: '150px', background: 'rgba(255,0,0,0.8)', color: '#fff', fontSize: '10px', padding: '10px', width: '100%', zIndex: 10000 }}>
           {lastError}
         </div>
       )}
 
-      {/* FINAL DEBUG PANEL: Reachable and exhaustive */}
+      {/* OVERRIDE TEST PANEL */}
       <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.5)' }}>
-        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold' }}>BURST (Try All IDs)</button>
-        <button onClick={() => updateIntensity(100, "2")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:2</button>
-        <button onClick={() => updateIntensity(100, "3")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:3</button>
-        <button onClick={() => updateIntensity(100, "0")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:0</button>
-        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>OFF</button>
+        <div style={{ color: '#fff', fontSize: '9px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>FORCE LEVEL TEST (Bypasses "maxLevel 1" limit)</div>
+        <button onClick={() => updateIntensity(0, "0", 1)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 1</button>
+        <button onClick={() => updateIntensity(0, "0", 3)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 3</button>
+        <button onClick={() => updateIntensity(0, "0", 5)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 5</button>
+        <button onClick={() => updateIntensity(0, "0", 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 10</button>
+        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
+        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold' }}>BURST</button>
       </div>
 
       <footer>
