@@ -6,6 +6,8 @@ import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import com.getcapacitor.JSArray;
@@ -23,6 +25,32 @@ import com.getcapacitor.annotation.Permission;
 public class IntensityControlPlugin extends Plugin {
 
     private static final String TAG = "IntensityControl";
+    private String lastStatus = "Unknown";
+
+    @Override
+    public void load() {
+        super.load();
+        setupTorchCallback();
+    }
+
+    private void setupTorchCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            CameraManager cameraManager = (CameraManager) getContext().getSystemService(Context.CAMERA_SERVICE);
+            cameraManager.registerTorchCallback(new CameraManager.TorchCallback() {
+                @Override
+                public void onTorchModeChanged(String cameraId, boolean enabled) {
+                    super.onTorchModeChanged(cameraId, enabled);
+                    lastStatus = "ID:" + cameraId + " " + (enabled ? "ON" : "OFF");
+                }
+
+                @Override
+                public void onTorchModeUnavailable(String cameraId) {
+                    super.onTorchModeUnavailable(cameraId);
+                    lastStatus = "ID:" + cameraId + " UNAVAILABLE";
+                }
+            }, new Handler(Looper.getMainLooper()));
+        }
+    }
 
     @PluginMethod
     public void getFlashHardwareInfo(PluginCall call) {
@@ -72,6 +100,7 @@ public class IntensityControlPlugin extends Plugin {
             response.put("cameras", results);
             response.put("manufacturer", Build.MANUFACTURER);
             response.put("model", Build.MODEL);
+            response.put("torchStatus", lastStatus);
             call.resolve(response);
         } catch (Exception e) {
             call.reject(e.getMessage());
@@ -81,6 +110,8 @@ public class IntensityControlPlugin extends Plugin {
     @PluginMethod
     public void setIntensity(PluginCall call) {
         Double intensity = call.getDouble("intensity");
+        String forceId = call.getString("cameraId");
+
         if (intensity == null) {
             call.reject("Intensity required");
             return;
@@ -90,16 +121,18 @@ public class IntensityControlPlugin extends Plugin {
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         try {
-            String cameraId = null;
-            // Best candidate selection
-            for (String id : cameraManager.getCameraIdList()) {
-                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
-                Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (hasFlash != null && hasFlash && lensFacing != null
-                        && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
-                    cameraId = id;
-                    break;
+            String cameraId = forceId;
+            if (cameraId == null) {
+                // Best candidate selection
+                for (String id : cameraManager.getCameraIdList()) {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                    Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                    Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                    if (hasFlash != null && hasFlash && lensFacing != null
+                            && lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+                        cameraId = id;
+                        break;
+                    }
                 }
             }
 
@@ -130,7 +163,7 @@ public class IntensityControlPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("success", true);
             ret.put("id", cameraId);
-            ret.put("val", intensity);
+            ret.put("status", lastStatus);
             call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "Native Error: " + e.getMessage());

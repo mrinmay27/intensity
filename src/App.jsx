@@ -15,7 +15,7 @@ function App() {
   const [activeStep, setActiveStep] = useState(0)
   const [hwData, setHwData] = useState(null)
   const [lastError, setLastError] = useState(null)
-  const [nativeResult, setNativeResult] = useState("Waiting...")
+  const [nativeResult, setNativeResult] = useState("Off")
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -79,7 +79,7 @@ function App() {
     playClick(val);
 
     IntensityControl.setIntensity({ intensity: val / 100 }).then(res => {
-      setNativeResult(`OK ID:${res.id}`);
+      setNativeResult(`ID:${res.id} ${res.status}`);
       setLastError(null);
     }).catch(err => {
       setLastError(err.message);
@@ -101,6 +101,15 @@ function App() {
       }
     };
     init();
+
+    // Auto-refresh hw info for status tracking
+    const interval = setInterval(async () => {
+      try {
+        const res = await IntensityControl.getFlashHardwareInfo();
+        setHwData(res);
+      } catch (e) { }
+    }, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -223,7 +232,8 @@ function App() {
               {hwData ? (
                 <>
                   {hwData.manufacturer} {hwData.model}<br />
-                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}
+                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}<br />
+                  Actual HW Status: {hwData.torchStatus}
                 </>
               ) : "Syncing... "}
               {lastError && <div style={{ color: '#ff4444' }}>Err: {lastError}</div>}
@@ -246,7 +256,27 @@ function App() {
         </div>
 
         <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
-          <button onClick={() => updateIntensity(100)} className="instruction" style={{ top: '80px', pointerEvents: 'auto', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '4px' }}>FORCE 100% TEST</button>
+          <button
+            onClick={(e) => { e.stopPropagation(); updateIntensity(100); }}
+            style={{
+              position: 'absolute',
+              top: '80px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 999,
+              pointerEvents: 'auto',
+              background: '#f0f0f0',
+              color: '#333',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+            }}
+          >
+            FORCE 100% TEST
+          </button>
           <div className="dial-wrapper">
             <svg className="dial-svg" viewBox="0 0 400 400">
               <defs>
