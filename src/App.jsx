@@ -16,6 +16,7 @@ function App() {
   const [hwData, setHwData] = useState(null)
   const [lastError, setLastError] = useState(null)
   const [nativeResult, setNativeResult] = useState("Off")
+  const [customId, setCustomId] = useState("0")
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -78,9 +79,11 @@ function App() {
     setIntensity(val);
     playClick(val);
 
+    const targetId = forcedId || customId;
+
     IntensityControl.setIntensity({
       intensity: val / 100,
-      cameraId: forcedId,
+      cameraId: targetId,
       forceLevel: forcedLevel
     }).then(res => {
       setNativeResult(`ID:${res.id} ${res.status}`);
@@ -94,12 +97,14 @@ function App() {
     setActiveStep(level);
   };
 
-  const burstAll = async () => {
+  const runDeepScan = async () => {
     try {
-      await IntensityControl.bruteForceAll();
-      setNativeResult("BURST SENT");
+      const res = await IntensityControl.deepScan();
+      setNativeResult("SCAN DONE");
+      const info = await IntensityControl.getFlashHardwareInfo();
+      setHwData(info);
     } catch (err) {
-      setLastError("Burst fail: " + err.message);
+      setLastError("Scan fail: " + err.message);
     }
   };
 
@@ -190,7 +195,7 @@ function App() {
   }, [mode]);
 
   const intensityFloat = intensity / 100;
-  const uiColor = intensityFloat > 0.8 ? '#333' : '#fff';
+  const uiColor = priority => intensityFloat > 0.8 ? '#333' : '#fff';
 
   const beamStyle = {
     height: `${intensity}%`,
@@ -204,7 +209,7 @@ function App() {
 
   return (
     <>
-      <header style={{ color: uiColor }}>
+      <header style={{ color: uiColor() }}>
         <div className="header-content">
           <div className="torch-icon">
             <svg viewBox="0 0 100 100" fill="currentColor">
@@ -244,7 +249,8 @@ function App() {
                 <>
                   {hwData.manufacturer} {hwData.model}<br />
                   {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}<br />
-                  Actual HW Status: <span style={{ color: hwData.torchStatus.includes('ON') ? '#00ff00' : '#fff' }}>{hwData.torchStatus}</span>
+                  Status: <span style={{ color: hwData.torchStatus.includes('ON') ? '#00ff00' : '#fff' }}>{hwData.torchStatus}</span><br />
+                  {hwData.scanResult && <div style={{ color: '#fff', fontSize: '6px' }}>{hwData.scanResult}</div>}
                 </>
               ) : "Syncing... "}
             </div>
@@ -317,15 +323,18 @@ function App() {
         </div>
       )}
 
-      {/* OVERRIDE TEST PANEL */}
-      <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.5)' }}>
-        <div style={{ color: '#fff', fontSize: '9px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>FORCE LEVEL TEST (Bypasses "maxLevel 1" limit)</div>
-        <button onClick={() => updateIntensity(0, "0", 1)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 1</button>
-        <button onClick={() => updateIntensity(0, "0", 3)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 3</button>
-        <button onClick={() => updateIntensity(0, "0", 5)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 5</button>
-        <button onClick={() => updateIntensity(0, "0", 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>LVL 10</button>
-        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
-        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold' }}>BURST</button>
+      {/* DEEP PROBE INTERFACE */}
+      <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.8)', borderTop: '1px solid #444' }}>
+        <div style={{ color: '#fff', fontSize: '10px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
+          TARGET ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '40px', background: '#333', color: '#fff', border: '1px solid #555', padding: '2px', textAlign: 'center' }} />
+          <button onClick={runDeepScan} style={{ marginLeft: '10px', background: '#007fff', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>RUN DEEP SCAN</button>
+        </div>
+        <div style={{ display: 'flex', gap: '5px' }}>
+          <button onClick={() => updateIntensity(100, customId, 1)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>FORCE L1</button>
+          <button onClick={() => updateIntensity(100, customId, 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>FORCE L10</button>
+          <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
+          <button onClick={() => updateIntensity(100, "0")} style={{ background: '#333', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>ID:0</button>
+        </div>
       </div>
 
       <footer>
