@@ -17,13 +17,11 @@ function App() {
   const [lastError, setLastError] = useState(null)
   const [nativeResult, setNativeResult] = useState("Off")
   const [customId, setCustomId] = useState("0")
-  const [burstMode, setBurstMode] = useState(false)
   const [usePWM, setUsePWM] = useState(false)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
   const dialRef = useRef(null)
-  const knobRef = useRef(null)
   const trackRef = useRef(null)
 
   const playClick = async (val) => {
@@ -52,7 +50,7 @@ function App() {
     }
   };
 
-  const updateIntensity = (val, forcedId = null, forcedLevel = null) => {
+  const updateIntensity = (val, forcedId = null) => {
     val = Math.max(0, Math.min(100, Math.round(val)));
     setIntensity(val);
     playClick(val);
@@ -62,11 +60,9 @@ function App() {
     IntensityControl.setIntensity({
       intensity: val / 100,
       cameraId: targetId,
-      forceLevel: forcedLevel,
-      burst: burstMode,
       usePWM: usePWM
     }).then(res => {
-      setNativeResult(`${usePWM ? 'PWM' : (burstMode ? 'BURST' : `ID:${targetId}`)} ${res.status}`);
+      setNativeResult(`${res.status}`);
       setLastError(null);
     }).catch(err => {
       setNativeResult(`FAIL`);
@@ -95,50 +91,33 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (mode !== 'monolith') return;
-    const track = trackRef.current;
-    if (!track) return;
-    let isDragging = false;
-    const handlePointerDown = () => { isDragging = true; };
-    const handlePointerMove = (e) => {
-      if (!isDragging) return;
-      const rect = track.getBoundingClientRect();
-      let p = 100 - ((e.clientY - rect.top) / rect.height) * 100;
-      updateIntensity(p);
-    };
-    const handlePointerUp = () => { isDragging = false; };
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => { window.removeEventListener('pointermove', handlePointerMove); window.removeEventListener('pointerup', handlePointerUp); };
-  }, [mode, burstMode, usePWM]);
+  const handleSliderPointerDown = (e) => {
+    e.target.setPointerCapture(e.pointerId);
+    handleSliderPointerMove(e);
+  };
 
-  useEffect(() => {
-    if (mode !== 'dial') return;
-    const dial = dialRef.current;
-    if (!dial) return;
-    let isDragging = false;
-    const handlePointerDown = () => { isDragging = true; };
-    const handlePointerMove = (e) => {
-      if (!isDragging) return;
-      const rect = dial.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
-      let normalized = (angle + 225) % 360;
-      if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
-      updateIntensity((normalized / 270) * 100);
-    };
-    const handlePointerUp = () => { isDragging = false; };
-    dial.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => {
-      dial.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-    };
-  }, [mode, burstMode, usePWM]);
+  const handleSliderPointerMove = (e) => {
+    if (!e.target.hasPointerCapture(e.pointerId)) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    let p = 100 - ((e.clientY - rect.top) / rect.height) * 100;
+    updateIntensity(p);
+  };
+
+  const handleDialPointerDown = (e) => {
+    e.target.setPointerCapture(e.pointerId);
+    handleDialPointerMove(e);
+  };
+
+  const handleDialPointerMove = (e) => {
+    if (!e.target.hasPointerCapture(e.pointerId)) return;
+    const rect = dialRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180 / Math.PI;
+    let normalized = (angle + 225) % 360;
+    if (normalized > 270) normalized = normalized < 315 ? 270 : 0;
+    updateIntensity((normalized / 270) * 100);
+  };
 
   const intensityFloat = intensity / 100;
   const strokeOffset = TOTAL_ARC_LENGTH * (1 - intensityFloat);
@@ -159,37 +138,63 @@ function App() {
           <div className="label">
             TORCH
             <div className="hw-debug" style={{ fontSize: '6px', opacity: 0.6 }}>
-              {hwData ? `${hwData.model} | ${hwData.torchStatus}` : "Syncing..."}
+              {hwData ? `${hwData.model} | HW Status: ${hwData.torchStatus}` : "Syncing..."}
             </div>
           </div>
         </div>
       </header>
 
       <main style={{ touchAction: 'none' }}>
-        <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`} id="monolith-container">
-          <div className="monolith-track" ref={trackRef} onPointerDown={() => { }}>
-            <div className="beam" style={{ height: `${intensity}%`, background: '#fff', boxShadow: `0 0 20px rgba(255, 255, 255, ${intensityFloat})` }}></div>
-            <div className="monolith-knob" style={{ bottom: `${intensity}%` }}></div>
+        <div className={`concept-view ${mode === 'monolith' ? 'active' : ''}`}>
+          <div
+            className="monolith-track"
+            ref={trackRef}
+            onPointerDown={handleSliderPointerDown}
+            onPointerMove={handleSliderPointerMove}
+            style={{ touchAction: 'none' }}
+          >
+            <div
+              className="beam"
+              style={{
+                height: `${intensity}%`,
+                background: '#fff',
+                boxShadow: `0 0 20px rgba(255, 255, 255, ${intensityFloat})`,
+                pointerEvents: 'none'
+              }}
+            ></div>
+            <div
+              className="monolith-knob"
+              style={{ bottom: `${intensity}%`, pointerEvents: 'none' }}
+            ></div>
           </div>
         </div>
-        <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
+
+        <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`}>
           <div className="dial-wrapper">
-            <svg className="dial-svg" viewBox="0 0 400 400"><path d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#000" strokeWidth="14" strokeLinecap="round" /><path id="arc-fill" d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" strokeDasharray={TOTAL_ARC_LENGTH} strokeDashoffset={strokeOffset} /></svg>
-            <div className="dial-outer" ref={dialRef} style={{ transform: `rotate(${210 + (intensityFloat * 300)}deg)` }} onPointerDown={() => { }}><div className="dial-mark"></div></div>
+            <svg className="dial-svg" viewBox="0 0 400 400" style={{ pointerEvents: 'none' }}>
+              <path d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#000" strokeWidth="14" strokeLinecap="round" /><path id="arc-fill" d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" strokeDasharray={TOTAL_ARC_LENGTH} strokeDashoffset={strokeOffset} /></svg>
+            <div
+              className="dial-outer"
+              ref={dialRef}
+              onPointerDown={handleDialPointerDown}
+              onPointerMove={handleDialPointerMove}
+              style={{ transform: `rotate(${210 + (intensityFloat * 300)}deg)`, touchAction: 'none' }}
+            >
+              <div className="dial-mark" style={{ pointerEvents: 'none' }}></div>
+            </div>
           </div>
         </div>
       </main>
 
       <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.8)' }}>
-        <div style={{ color: '#fff', fontSize: '10px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
+        <div style={{ color: '#fff', fontSize: '9px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
           ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '30px', background: '#333', color: '#fff', border: '1px solid #555' }} />
-          <button onClick={() => setUsePWM(!usePWM)} style={{ marginLeft: '10px', background: usePWM ? '#00ff00' : '#444', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>PWM: {usePWM ? 'ON' : 'OFF'}</button>
-          <button onClick={() => setBurstMode(!burstMode)} style={{ marginLeft: '5px', background: burstMode ? '#ff4444' : '#444', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>BURST: {burstMode ? 'ON' : 'OFF'}</button>
+          <button onClick={() => setUsePWM(!usePWM)} style={{ marginLeft: '10px', background: usePWM ? '#00ff00' : '#444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '3px', fontSize: '9px' }}>PWM: {usePWM ? 'ON' : 'OFF'}</button>
         </div>
-        <button onClick={() => updateIntensity(20)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>20%</button>
-        <button onClick={() => updateIntensity(50)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>50%</button>
-        <button onClick={() => updateIntensity(100)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>100%</button>
-        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>OFF</button>
+        <button onClick={() => updateIntensity(20)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>20%</button>
+        <button onClick={() => updateIntensity(50)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>50%</button>
+        <button onClick={() => updateIntensity(100)} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>100%</button>
+        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
       </div>
 
       <footer>
