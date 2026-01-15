@@ -19,6 +19,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 
+import java.util.Set;
+
 @CapacitorPlugin(name = "IntensityControl", permissions = {
         @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })
 })
@@ -27,6 +29,7 @@ public class IntensityControlPlugin extends Plugin {
     private static final String TAG = "IntensityControl";
     private String lastStatus = "Unknown";
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private String liveLog = "";
 
     @Override
     public void load() {
@@ -84,6 +87,15 @@ public class IntensityControlPlugin extends Plugin {
                 } else {
                     info.put("maxLevel", hasFlash != null && hasFlash ? 1 : 0);
                 }
+
+                // Add Physical IDs if available
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    Set<String> physicalIds = characteristics.getPhysicalCameraIds();
+                    if (physicalIds != null && !physicalIds.isEmpty()) {
+                        info.put("physicalIds", new JSArray(physicalIds.toArray()));
+                    }
+                }
+
                 results.put(info);
             }
 
@@ -92,6 +104,7 @@ public class IntensityControlPlugin extends Plugin {
             response.put("manufacturer", Build.MANUFACTURER);
             response.put("model", Build.MODEL);
             response.put("torchStatus", lastStatus);
+            response.put("liveLog", liveLog);
             call.resolve(response);
         } catch (Exception e) {
             call.reject(e.getMessage());
@@ -114,7 +127,7 @@ public class IntensityControlPlugin extends Plugin {
         try {
             String cameraId = forceId;
             if (cameraId == null) {
-                // Auto-selector
+                // Auto-selector logic
                 for (String id : cameraManager.getCameraIdList()) {
                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
                     Boolean hasFlash = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
@@ -125,25 +138,23 @@ public class IntensityControlPlugin extends Plugin {
                         break;
                     }
                 }
-                // Fallback to ANY in list if auto-selector failed
                 if (cameraId == null && cameraManager.getCameraIdList().length > 0) {
                     cameraId = cameraManager.getCameraIdList()[0];
                 }
             }
 
             if (cameraId == null) {
-                call.reject("No camera ID found");
+                call.reject("Hardware not found");
                 return;
             }
 
-            // Always try setTorchMode FIRST for maximum compatibility, then
-            // turnOnTorchWithStrengthLevel
             if (intensity <= 0) {
                 cameraManager.setTorchMode(cameraId, false);
             } else {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
                     Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
+
                     if (maxLevel != null && maxLevel > 1) {
                         int level = (int) Math.round(intensity * maxLevel);
                         level = Math.max(1, Math.min(maxLevel, level));
@@ -162,6 +173,8 @@ public class IntensityControlPlugin extends Plugin {
             ret.put("status", lastStatus);
             call.resolve(ret);
         } catch (Exception e) {
+            Log.e(TAG, "Native Error: " + e.getMessage());
+            liveLog = "Err ID:" + forceId + " -> " + e.getMessage();
             call.reject(e.getMessage());
         }
     }
@@ -171,12 +184,19 @@ public class IntensityControlPlugin extends Plugin {
         Context context = getContext();
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         try {
+            // Logical IDs
             String[] ids = cameraManager.getCameraIdList();
             for (String id : ids) {
                 try {
                     cameraManager.setTorchMode(id, true);
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to force ID:" + id);
+                }
+            }
+            // Hidden ID guess (some devices use 2 or 3 for auxiliary flash)
+            for (int i = 0; i < 6; i++) {
+                try {
+                    cameraManager.setTorchMode(String.valueOf(i), true);
+                } catch (Exception e) {
                 }
             }
             call.resolve();

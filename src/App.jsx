@@ -85,8 +85,8 @@ function App() {
       setNativeResult(`ID:${res.id} ${res.status}`);
       setLastError(null);
     }).catch(err => {
-      setLastError(err.message);
       setNativeResult(`FAIL`);
+      setLastError(err.message);
     });
 
     const level = Math.ceil(val / 20);
@@ -98,7 +98,7 @@ function App() {
       await IntensityControl.bruteForceAll();
       setNativeResult("BURST SENT");
     } catch (err) {
-      setLastError("Burst: " + err.message);
+      setLastError("Burst fail: " + err.message);
     }
   };
 
@@ -238,15 +238,14 @@ function App() {
           </div>
           <div className="label">
             TORCH
-            <div className="hw-debug" style={{ fontSize: '6px', opacity: 0.5, marginTop: '2px', lineHeight: '1.2' }}>
+            <div className="hw-debug" style={{ fontSize: '6.5px', opacity: 0.6, marginTop: '2px', lineHeight: '1.2' }}>
               {hwData ? (
                 <>
                   {hwData.manufacturer} {hwData.model}<br />
-                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}`).join(' | ')}<br />
-                  Actual HW Status: {hwData.torchStatus}
+                  {hwData.cameras.map(c => `C${c.id}:${c.maxLevel}${c.physicalIds ? `(Ph:${c.physicalIds.join(',')})` : ''}`).join(' | ')}<br />
+                  Actual HW Status: <span style={{ color: hwData.torchStatus.includes('ON') ? '#00ff00' : '#fff' }}>{hwData.torchStatus}</span>
                 </>
               ) : "Syncing... "}
-              {lastError && <div style={{ color: '#ff4444' }}>Err: {lastError}</div>}
             </div>
           </div>
         </div>
@@ -310,12 +309,20 @@ function App() {
         </div>
       </main>
 
-      {/* FIXED DEBUG PANEL: Bottom of screen, definitely clickable */}
-      <div style={{ position: 'fixed', bottom: '100px', left: 0, right: 0, zIndex: 9999, display: 'flex', gap: '5px', padding: '0 10px', justifyContent: 'center', pointerEvents: 'auto' }}>
-        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px', fontWeight: 'bold' }}>BURST ALL IDs</button>
-        <button onClick={() => updateIntensity(100, "0")} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>TEST C0</button>
-        <button onClick={() => updateIntensity(100, "1")} style={{ background: '#333', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>TEST C1</button>
-        <button onClick={() => updateIntensity(0)} style={{ background: '#000', color: '#fff', border: '1px solid #555', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
+      {/* ERROR CONSOLE: Floating floating box if error exists */}
+      {lastError && (
+        <div style={{ position: 'fixed', top: '150px', background: 'rgba(255,0,0,0.8)', color: '#fff', fontSize: '10px', padding: '10px', width: '100%', zIndex: 10000 }}>
+          {lastError}
+        </div>
+      )}
+
+      {/* FINAL DEBUG PANEL: Reachable and exhaustive */}
+      <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.5)' }}>
+        <button onClick={burstAll} style={{ background: '#ff4444', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold' }}>BURST (Try All IDs)</button>
+        <button onClick={() => updateIntensity(100, "2")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:2</button>
+        <button onClick={() => updateIntensity(100, "3")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:3</button>
+        <button onClick={() => updateIntensity(100, "0")} style={{ background: '#444', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>ID:0</button>
+        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '12px', borderRadius: '5px', fontSize: '11px' }}>OFF</button>
       </div>
 
       <footer>
