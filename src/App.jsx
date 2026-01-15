@@ -17,6 +17,7 @@ function App() {
   const [lastError, setLastError] = useState(null)
   const [nativeResult, setNativeResult] = useState("Off")
   const [customId, setCustomId] = useState("0")
+  const [burstMode, setBurstMode] = useState(false)
 
   const audioCtxRef = useRef(null)
   const lastTickRef = useRef(-1)
@@ -84,9 +85,10 @@ function App() {
     IntensityControl.setIntensity({
       intensity: val / 100,
       cameraId: targetId,
-      forceLevel: forcedLevel
+      forceLevel: forcedLevel,
+      burst: burstMode
     }).then(res => {
-      setNativeResult(`ID:${res.id} ${res.status}`);
+      setNativeResult(`${burstMode ? 'BURST' : `ID:${targetId}`} ${res.status}`);
       setLastError(null);
     }).catch(err => {
       setNativeResult(`FAIL`);
@@ -95,17 +97,6 @@ function App() {
 
     const level = Math.ceil(val / 20);
     setActiveStep(level);
-  };
-
-  const runDeepScan = async () => {
-    try {
-      const res = await IntensityControl.deepScan();
-      setNativeResult("SCAN DONE");
-      const info = await IntensityControl.getFlashHardwareInfo();
-      setHwData(info);
-    } catch (err) {
-      setLastError("Scan fail: " + err.message);
-    }
   };
 
   useEffect(() => {
@@ -158,7 +149,7 @@ function App() {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [mode]);
+  }, [mode, burstMode]);
 
   useEffect(() => {
     if (mode !== 'dial') return;
@@ -192,10 +183,10 @@ function App() {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [mode]);
+  }, [mode, burstMode]);
 
   const intensityFloat = intensity / 100;
-  const uiColor = priority => intensityFloat > 0.8 ? '#333' : '#fff';
+  const uiColor = () => intensityFloat > 0.8 ? '#333' : '#fff';
 
   const beamStyle = {
     height: `${intensity}%`,
@@ -273,6 +264,7 @@ function App() {
 
         <div className={`concept-view ${mode === 'dial' ? 'active' : ''}`} id="dial-container">
           <div className="dial-wrapper">
+            {/* ... existing dial svg ... */}
             <svg className="dial-svg" viewBox="0 0 400 400">
               <defs>
                 <filter id="arc-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -283,34 +275,10 @@ function App() {
                   </feMerge>
                 </filter>
               </defs>
-              <path
-                d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`}
-                fill="none"
-                stroke="#000000"
-                strokeWidth="14"
-                strokeLinecap="round"
-              />
-              <path
-                id="arc-fill"
-                d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`}
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth="14"
-                strokeLinecap="round"
-                filter="url(#arc-glow)"
-                strokeDasharray={TOTAL_ARC_LENGTH}
-                strokeDashoffset={strokeOffset}
-              />
+              <path d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#000" strokeWidth="14" strokeLinecap="round" />
+              <path id="arc-fill" d={`M ${200 + ARC_RADIUS * Math.cos((210 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((210 - 90) * Math.PI / 180)} A ${ARC_RADIUS} ${ARC_RADIUS} 0 1 1 ${200 + ARC_RADIUS * Math.cos((510 - 90) * Math.PI / 180)} ${200 + ARC_RADIUS * Math.sin((510 - 90) * Math.PI / 180)}`} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" filter="url(#arc-glow)" strokeDasharray={TOTAL_ARC_LENGTH} strokeDashoffset={strokeOffset} />
             </svg>
-
-            <div
-              className="dial-outer"
-              id="dial-outer"
-              ref={dialRef}
-              style={dialStyle}
-            >
-              <div className="dial-mark"></div>
-            </div>
+            <div className="dial-outer" ref={dialRef} style={dialStyle}><div className="dial-mark"></div></div>
           </div>
           <div className="instruction">ROTATE</div>
         </div>
@@ -323,37 +291,25 @@ function App() {
         </div>
       )}
 
-      {/* DEEP PROBE INTERFACE */}
+      {/* AGGRESSIVE PROBE PANEL */}
       <div style={{ position: 'fixed', bottom: '110px', left: 0, right: 0, zIndex: 9999, display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '10px', justifyContent: 'center', pointerEvents: 'auto', background: 'rgba(0,0,0,0.8)', borderTop: '1px solid #444' }}>
         <div style={{ color: '#fff', fontSize: '10px', width: '100%', textAlign: 'center', marginBottom: '5px' }}>
-          TARGET ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '40px', background: '#333', color: '#fff', border: '1px solid #555', padding: '2px', textAlign: 'center' }} />
-          <button onClick={runDeepScan} style={{ marginLeft: '10px', background: '#007fff', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>RUN DEEP SCAN</button>
+          ID: <input type="number" value={customId} onChange={e => setCustomId(e.target.value)} style={{ width: '30px', background: '#333', color: '#fff', border: '1px solid #555' }} />
+          <button onClick={() => setBurstMode(!burstMode)} style={{ marginLeft: '10px', background: burstMode ? '#ff4444' : '#444', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>
+            {burstMode ? "BURST: ON" : "BURST: OFF"}
+          </button>
+          <button onClick={() => IntensityControl.deepScan()} style={{ marginLeft: '5px', background: '#007fff', color: '#fff', border: 'none', padding: '5px', borderRadius: '3px', fontSize: '9px' }}>SCAN</button>
         </div>
-        <div style={{ display: 'flex', gap: '5px' }}>
-          <button onClick={() => updateIntensity(100, customId, 1)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>FORCE L1</button>
-          <button onClick={() => updateIntensity(100, customId, 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>FORCE L10</button>
-          <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>OFF</button>
-          <button onClick={() => updateIntensity(100, "0")} style={{ background: '#333', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '10px' }}>ID:0</button>
-        </div>
+        <button onClick={() => updateIntensity(100, customId, 5)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>F5</button>
+        <button onClick={() => updateIntensity(100, customId, 10)} style={{ background: '#444', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>F10</button>
+        <button onClick={() => updateIntensity(0)} style={{ background: '#222', color: '#fff', border: 'none', padding: '10px', borderRadius: '5px', fontSize: '8px' }}>OFF</button>
       </div>
 
       <footer>
         <div className="interaction-group">
-          <button
-            className={`switcher-btn ${mode === 'monolith' ? 'active' : ''}`}
-            data-mode="monolith"
-            onClick={() => setMode('monolith')}
-          >
-            SLIDER
-          </button>
+          <button className={`switcher-btn ${mode === 'monolith' ? 'active' : ''}`} onClick={() => setMode('monolith')}>SLIDER</button>
           <div className="haptic-node" id="haptic-visualizer"></div>
-          <button
-            className={`switcher-btn ${mode === 'dial' ? 'active' : ''}`}
-            data-mode="dial"
-            onClick={() => setMode('dial')}
-          >
-            DIAL
-          </button>
+          <button className={`switcher-btn ${mode === 'dial' ? 'active' : ''}`} onClick={() => setMode('dial')}>DIAL</button>
         </div>
       </footer>
     </>

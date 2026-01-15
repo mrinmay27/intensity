@@ -21,7 +21,6 @@ import com.getcapacitor.annotation.Permission;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @CapacitorPlugin(name = "IntensityControl", permissions = {
         @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })
@@ -110,51 +109,60 @@ public class IntensityControlPlugin extends Plugin {
         Double intensity = call.getDouble("intensity");
         String forceId = call.getString("cameraId");
         Integer forceLevel = call.getInt("forceLevel");
-
-        if (intensity == null && forceLevel == null) {
-            call.reject("Intensity required");
-            return;
-        }
+        Boolean burstAll = call.getBoolean("burst", false);
 
         Context context = getContext();
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         try {
-            String cameraId = forceId != null ? forceId : "0";
-
-            if (forceLevel != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    cameraManager.turnOnTorchWithStrengthLevel(cameraId, forceLevel);
-                    JSObject ret = new JSObject();
-                    ret.put("success", true);
-                    ret.put("id", cameraId);
-                    ret.put("status", "FORCED:" + forceLevel);
-                    call.resolve(ret);
-                    return;
+            List<String> targetIds = new ArrayList<>();
+            if (burstAll) {
+                String[] ids = cameraManager.getCameraIdList();
+                for (String id : ids)
+                    targetIds.add(id);
+                // Also common hidden ones
+                for (int i = 0; i < 11; i++) {
+                    String si = String.valueOf(i);
+                    if (!targetIds.contains(si))
+                        targetIds.add(si);
                 }
+            } else {
+                targetIds.add(forceId != null ? forceId : "0");
             }
 
-            if (intensity <= 0) {
-                cameraManager.setTorchMode(cameraId, false);
-            } else {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
-                    Integer maxLevel = characteristics.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
-                    if (maxLevel != null && maxLevel > 1) {
-                        int level = (int) Math.round(intensity * maxLevel);
-                        level = Math.max(1, Math.min(maxLevel, level));
-                        cameraManager.turnOnTorchWithStrengthLevel(cameraId, level);
-                    } else {
-                        cameraManager.setTorchMode(cameraId, true);
+            for (String id : targetIds) {
+                try {
+                    if (forceLevel != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            cameraManager.turnOnTorchWithStrengthLevel(id, forceLevel);
+                        }
+                    } else if (intensity != null) {
+                        if (intensity <= 0) {
+                            cameraManager.setTorchMode(id, false);
+                        } else {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                // Try strength first, even if it reports max 1
+                                try {
+                                    int level = (int) Math.round(intensity * 10); // Try 1-10 range
+                                    level = Math.max(1, level);
+                                    cameraManager.turnOnTorchWithStrengthLevel(id, level);
+                                } catch (Exception e) {
+                                    cameraManager.setTorchMode(id, true);
+                                }
+                            } else {
+                                cameraManager.setTorchMode(id, true);
+                            }
+                        }
                     }
-                } else {
-                    cameraManager.setTorchMode(cameraId, true);
+                } catch (Exception e) {
+                    // Ignore individual failures in burst mode
+                    if (!burstAll)
+                        throw e;
                 }
             }
 
             JSObject ret = new JSObject();
             ret.put("success", true);
-            ret.put("id", cameraId);
             ret.put("status", lastStatus);
             call.resolve(ret);
         } catch (Exception e) {
@@ -168,53 +176,23 @@ public class IntensityControlPlugin extends Plugin {
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
         List<String> found = new ArrayList<>();
 
-        // Try IDs 0 to 20
         for (int i = 0; i < 21; i++) {
             String id = String.valueOf(i);
             try {
-                // Just check if it exists in characteristics first
                 CameraCharacteristics c = cameraManager.getCameraCharacteristics(id);
                 Boolean hasFlash = c.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
                 Integer maxL = 0;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     maxL = c.get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL);
                 }
-                found.add(id + (hasFlash != null && hasFlash ? "⚡" : "")
-                        + (maxL != null && maxL > 0 ? "dim:" + maxL : ""));
+                found.add(id + (hasFlash != null && hasFlash ? "⚡" : "") + (maxL != null ? "d" + maxL : ""));
             } catch (Exception e) {
             }
         }
 
-        scanResult = "Found IDs: " + String.join(", ", found);
-
+        scanResult = "IDs: " + String.join(", ", found);
         JSObject ret = new JSObject();
         ret.put("result", scanResult);
         call.resolve(ret);
-    }
-
-    @PluginMethod
-    public void bruteForceAll(PluginCall call) {
-        Context context = getContext();
-        CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            // First try official list
-            String[] ids = cameraManager.getCameraIdList();
-            for (String id : ids) {
-                try {
-                    cameraManager.setTorchMode(id, true);
-                } catch (Exception e) {
-                }
-            }
-            // Then try common hidden IDs
-            for (int i = 0; i < 11; i++) {
-                try {
-                    cameraManager.setTorchMode(String.valueOf(i), true);
-                } catch (Exception e) {
-                }
-            }
-            call.resolve();
-        } catch (Exception e) {
-            call.reject(e.getMessage());
-        }
     }
 }
