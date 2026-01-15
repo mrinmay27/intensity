@@ -21,6 +21,8 @@ import com.getcapacitor.annotation.Permission;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 @CapacitorPlugin(name = "IntensityControl", permissions = {
         @Permission(alias = "camera", strings = { Manifest.permission.CAMERA })
@@ -31,6 +33,10 @@ public class IntensityControlPlugin extends Plugin {
     private String lastStatus = "Unknown";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private String scanResult = "";
+
+    // PWM Simulation
+    private Timer pwmTimer;
+    private boolean pwmState = false;
 
     @Override
     public void load() {
@@ -90,17 +96,6 @@ public class IntensityControlPlugin extends Plugin {
                     info.put("maxLevel", hasFlash != null && hasFlash ? 1 : 0);
                 }
 
-                // DUMP ALL KEYS for the primary back camera (usually ID 0 or the one with
-                // flash)
-                if (id.equals("0") || (hasFlash != null && hasFlash)) {
-                    List<CameraCharacteristics.Key<?>> keys = characteristics.getKeys();
-                    JSArray keyNames = new JSArray();
-                    for (CameraCharacteristics.Key<?> key : keys) {
-                        keyNames.put(key.getName());
-                    }
-                    info.put("keys", keyNames);
-                }
-
                 results.put(info);
             }
 
@@ -122,11 +117,25 @@ public class IntensityControlPlugin extends Plugin {
         String forceId = call.getString("cameraId");
         Integer forceLevel = call.getInt("forceLevel");
         Boolean burstAll = call.getBoolean("burst", false);
+        Boolean usePWM = call.getBoolean("usePWM", false);
+
+        stopPWM();
 
         Context context = getContext();
         CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
 
         try {
+            String cameraId = forceId != null ? forceId : "0";
+
+            if (usePWM && intensity != null && intensity > 0 && intensity < 1.0) {
+                startPWM(cameraManager, cameraId, intensity);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("status", "PWM ACTIVE");
+                call.resolve(ret);
+                return;
+            }
+
             List<String> targetIds = new ArrayList<>();
             if (burstAll) {
                 String[] ids = cameraManager.getCameraIdList();
@@ -138,7 +147,7 @@ public class IntensityControlPlugin extends Plugin {
                         targetIds.add(si);
                 }
             } else {
-                targetIds.add(forceId != null ? forceId : "0");
+                targetIds.add(cameraId);
             }
 
             for (String id : targetIds) {
@@ -153,7 +162,6 @@ public class IntensityControlPlugin extends Plugin {
                         } else {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 try {
-                                    // Try strength first, even if it reports max 1
                                     int level = (int) Math.round(intensity * 10);
                                     level = Math.max(1, level);
                                     cameraManager.turnOnTorchWithStrengthLevel(id, level);
@@ -177,6 +185,31 @@ public class IntensityControlPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject(e.getMessage());
+        }
+    }
+
+    private void startPWM(CameraManager cm, String cid, double targetIntensity) {
+        pwmTimer = new Timer();
+        long period = 50; // 20Hz base for visibility check
+        long onTime = (long) (period * targetIntensity);
+
+        pwmTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    cm.setTorchMode(cid, true);
+                    Thread.sleep(Math.max(1, onTime));
+                    cm.setTorchMode(cid, false);
+                } catch (Exception e) {
+                }
+            }
+        }, 0, period);
+    }
+
+    private void stopPWM() {
+        if (pwmTimer != null) {
+            pwmTimer.cancel();
+            pwmTimer = null;
         }
     }
 
